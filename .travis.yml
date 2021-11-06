@@ -20,7 +20,7 @@ script:
 # Definir o Deploy no Heroku
 deploy:
   provider: heroku
-  api_key: $HEROKU_API_KEY
+  api_key: $HEROKU_APP_KEY
   edge: true 
   app: devopslab-hignacio
   on:
