@@ -7,7 +7,7 @@ csrf = CSRFProtect(app)
 
 @app.route("/")
 def pagina_inicial():
-    return "Novo Deploy Heroku Mothafucker"
+    return "Heroku Mothafucker"
 
 if __name__ == '__main__':
     app.run()
