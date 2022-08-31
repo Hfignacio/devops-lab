@@ -25,15 +25,25 @@ jobs:
       - name: Unit Test
         run: python -m unittest -v test
 
+      - name: Login to Heroku Container registry
+        env: 
+          HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
+        run: heroku container:login
+
+      - name: Docker Image & Push Heroku Registry
+        env:
+          HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
+        run: heroku container:push -a ${{ secrets.HEROKU_APP_NAME }} web
+
   Deploy:
     needs: Build
     runs-on: ubuntu-latest
 
     steps:
-      - name: Deploy Heroku
-        env:
-          HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
-        run: heroku container:release -a ${{ secrets.HEROKU_APP_NAME }} web
+      - name: Checkout Repo
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
 
       # Autenticação do Heroku CLI via API TOKEN
       # https://devcenter.heroku.com/articles/authentication
@@ -41,10 +51,10 @@ jobs:
         run: | 
             cat > ~/.netrc <<EOF
               machine api.heroku.com
-                email $HEROKU_EMAIL
+                login $HEROKU_EMAIL
                 password $HEROKU_API_KEY
               machine git.heroku.com
-                email $HEROKU_EMAIL
+                login $HEROKU_EMAIL
                 password $HEROKU_API_KEY
             EOF
         env:
@@ -59,14 +69,4 @@ jobs:
 
       # Enviando o código da App para o Heroku fazer Deploy
       - name: Push to Heroku & Deploy
-        run: git push heroku main --force
-      
-      - name: Login to Heroku Container registry
-        env: 
-          HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
-        run: heroku container:login
-
-      - name: Docker Image & Push Heroku Registry
-        env:
-          HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
-        run: heroku container:push -a ${{ secrets.HEROKU_APP_NAME }} web
+        run: git push heroku HEAD:main --force
