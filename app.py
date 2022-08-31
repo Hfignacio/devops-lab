@@ -1,4 +1,5 @@
 from flask import Flask
+import os
 from flask_wtf.csrf import CSRFProtect
 
 app = Flask(__name__)
@@ -10,4 +11,5 @@ def pagina_inicial():
     return "Heroku Mothafucker"
 
 if __name__ == '__main__':
-    app.run()
+    port = os.getenv('PORT')
+    app.run('0.0.0.0', port=port)
