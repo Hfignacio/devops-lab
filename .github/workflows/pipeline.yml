@@ -25,6 +25,12 @@ jobs:
       - name: Unit Test
         run: python -m unittest -v test
 
+      #- name: SonarCloud Scan
+      #  uses: SonarSource/sonarcloud-github-action@master
+      #  env:
+      #    GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  
+      #    SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }} 
+
       - name: Login to Heroku Container registry
         env: 
           HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
@@ -35,38 +41,52 @@ jobs:
           HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
         run: heroku container:push -a ${{ secrets.HEROKU_APP_NAME }} web
 
-  Deploy:
+      - name: Docker Login
+        env:
+          GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
+          ARTIFACT_REGISTRY:  ${{ secrets.ARTIFACT_REGISTRY}}
+        run: | 
+          echo '${{ secrets.GOOGLE_CREDENTIALS }}' > key.json
+          cat key.json | docker login -u _json_key --password-stdin ${{ secrets.ARTIFACT_REGISTRY }}
+
+      - name: Build Image & Push
+        env: 
+          ARTIFACT_REGISTRY_REPO: ${{ secrets.ARTIFACT_REGISTRY_REPO }}
+        run: | 
+          docker build -t ${{ secrets.ARTIFACT_REGISTRY_REPO }}/myapp:latest .
+          docker push ${{ secrets.ARTIFACT_REGISTRY_REPO }}/myapp:latest
+
+
+  DeployHom:
     needs: Build
     runs-on: ubuntu-latest
+    steps:
+      - name: Deploy Heroku
+        env:
+          HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
+        run: heroku container:release -a ${{ secrets.HEROKU_APP_NAME }} web
 
+  DeployProd:
+    needs: DeployHom
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v2
+      
+      - name: Auth GCP AppEngine
+        env:
+          GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
+        uses: 'google-github-actions/auth@v0'
         with:
-          fetch-depth: 0
+          credentials_json: '${{ secrets.GOOGLE_CREDENTIALS }}'
 
-      # Autenticação do Heroku CLI via API TOKEN
-      # https://devcenter.heroku.com/articles/authentication
-      - name: Heroku Login
-        run: | 
-            cat > ~/.netrc <<EOF
-              machine api.heroku.com
-                login $HEROKU_EMAIL
-                password $HEROKU_API_KEY
-              machine git.heroku.com
-                login $HEROKU_EMAIL
-                password $HEROKU_API_KEY
-            EOF
-        env:
-            HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
-            HEROKU_EMAIL: ${{ secrets.HEROKU_EMAIL }}
+      - name: Deploy to App Engine
+        id: appengine
+        env: 
+          ARTIFACT_REGISTRY_REPO: ${{ secrets.ARTIFACT_REGISTRY_REPO }}
+        uses: 'google-github-actions/deploy-appengine@v0'
+        with:
+          image_url: ${{ secrets.ARTIFACT_REGISTRY_REPO }}/myapp:latest
 
-      # Adicionando o Repositório Remoto do Heroku para poder enviar o código da app
-      - name: Add Heroku Remote
-        run: heroku git:remote --app $HEROKU_APP_NAME
-        env:
-            HEROKU_APP_NAME: ${{ secrets.HEROKU_APP_NAME }}
-
-      # Enviando o código da App para o Heroku fazer Deploy
-      - name: Push to Heroku & Deploy
-        run: git push heroku HEAD:main --force
+      - name: Prod Test
+        run: 'curl "${{ steps.appengine.outputs.url }}"'  
